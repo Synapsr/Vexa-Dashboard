@@ -1,0 +1,146 @@
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type { VexaUser } from "@/types/vexa";
+
+interface AuthState {
+  user: VexaUser | null;
+  token: string | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+
+  // Actions
+  sendMagicLink: (email: string) => Promise<{ success: boolean; error?: string }>;
+  setAuth: (user: VexaUser, token: string) => void;
+  logout: () => void;
+  setUser: (user: VexaUser | null) => void;
+  setToken: (token: string | null) => void;
+  checkAuth: () => Promise<void>;
+
+  // Legacy login (kept for backwards compatibility)
+  login: (email: string) => Promise<{ success: boolean; error?: string }>;
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      token: null,
+      isLoading: false,
+      isAuthenticated: false,
+
+      sendMagicLink: async (email: string) => {
+        set({ isLoading: true });
+        try {
+          const response = await fetch("/api/auth/send-magic-link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+
+          const data = await response.json();
+
+          set({ isLoading: false });
+
+          if (!response.ok) {
+            return { success: false, error: data.error || "Failed to send magic link" };
+          }
+
+          return { success: true };
+        } catch (error) {
+          set({ isLoading: false });
+          return { success: false, error: (error as Error).message };
+        }
+      },
+
+      setAuth: (user: VexaUser, token: string) => {
+        set({
+          user,
+          token,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      },
+
+      // Legacy login that directly authenticates (for backwards compatibility or dev mode)
+      login: async (email: string) => {
+        set({ isLoading: true });
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            set({ isLoading: false });
+            return { success: false, error: data.error || "Login failed" };
+          }
+
+          set({
+            user: data.user,
+            token: data.token,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+
+          return { success: true };
+        } catch (error) {
+          set({ isLoading: false });
+          return { success: false, error: (error as Error).message };
+        }
+      },
+
+      logout: () => {
+        // Clear server-side cookie
+        fetch("/api/auth/logout", { method: "POST" });
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+        });
+      },
+
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      setToken: (token) => set({ token }),
+
+      checkAuth: async () => {
+        const { token, user } = get();
+
+        // If we have user in localStorage, consider authenticated
+        if (user && token) {
+          set({ isAuthenticated: true });
+          return;
+        }
+
+        // Try to verify with server (cookie-based)
+        try {
+          const response = await fetch("/api/auth/me");
+          if (response.ok) {
+            // Cookie is valid, but we don't have user info
+            // Keep existing user if any
+            set({ isAuthenticated: true });
+          } else {
+            set({ user: null, token: null, isAuthenticated: false });
+          }
+        } catch {
+          // If server check fails but we have local data, trust it
+          if (user && token) {
+            set({ isAuthenticated: true });
+          } else {
+            set({ user: null, token: null, isAuthenticated: false });
+          }
+        }
+      },
+    }),
+    {
+      name: "vexa-auth",
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
+  )
+);

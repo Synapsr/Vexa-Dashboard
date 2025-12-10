@@ -1,0 +1,170 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Mail, Loader2, Mic, CheckCircle, ArrowLeft } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuthStore } from "@/stores/auth-store";
+import { toast } from "sonner";
+
+type LoginState = "email" | "sent";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const { sendMagicLink, isLoading, isAuthenticated } = useAuthStore();
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<LoginState>("email");
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/");
+    }
+  }, [isAuthenticated, router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!email) {
+      toast.error("Please enter your email");
+      return;
+    }
+
+    const result = await sendMagicLink(email);
+
+    if (result.success) {
+      setState("sent");
+      toast.success("Magic link sent! Check your email.");
+    } else {
+      toast.error(result.error || "Failed to send magic link");
+    }
+  };
+
+  const handleResend = async () => {
+    const result = await sendMagicLink(email);
+
+    if (result.success) {
+      toast.success("Magic link sent again! Check your email.");
+    } else {
+      toast.error(result.error || "Failed to resend magic link");
+    }
+  };
+
+  const handleBack = () => {
+    setState("email");
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/30 p-4">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
+            <Mic className="h-6 w-6 text-primary-foreground" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Vexa</h1>
+            <p className="text-sm text-muted-foreground">Meeting Transcription</p>
+          </div>
+        </div>
+
+        <Card className="border-0 shadow-xl">
+          {state === "email" ? (
+            <>
+              <CardHeader className="text-center">
+                <CardTitle className="text-xl">Welcome</CardTitle>
+                <CardDescription>
+                  Enter your email to receive a sign-in link
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        disabled={isLoading}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending link...
+                      </>
+                    ) : (
+                      "Send Magic Link"
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </>
+          ) : (
+            <>
+              <CardHeader className="text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                    <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+                <CardTitle className="text-xl">Check your email</CardTitle>
+                <CardDescription>
+                  We sent a magic link to <span className="font-medium text-foreground">{email}</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
+                  <p className="mb-2">Click the link in the email to sign in.</p>
+                  <p>The link will expire in 15 minutes.</p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleResend}
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      "Resend magic link"
+                    )}
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    onClick={handleBack}
+                    className="w-full"
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Use a different email
+                  </Button>
+                </div>
+              </CardContent>
+            </>
+          )}
+        </Card>
+
+        <p className="text-center text-xs text-muted-foreground mt-6">
+          Vexa Dashboard - Open Source Meeting Transcription
+        </p>
+      </div>
+    </div>
+  );
+}
