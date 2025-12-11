@@ -11,6 +11,7 @@ import type { MeetingStatus, Platform } from "@/types/vexa";
 
 // Timeout in seconds before showing a warning
 const REQUESTED_TIMEOUT_SECONDS = 30;
+const JOINING_TIMEOUT_SECONDS = 60; // Give more time for joining state
 const BOT_CHECK_INTERVAL_MS = 5000;
 
 interface BotStatusIndicatorProps {
@@ -18,6 +19,7 @@ interface BotStatusIndicatorProps {
   platform: string;
   meetingId: string;
   createdAt?: string;
+  updatedAt?: string;
   errorMessage?: string;
   onRetry?: () => void;
   onStopped?: () => void;
@@ -39,7 +41,7 @@ const STATUS_ORDER: Record<string, number> = {
   failed: -1,
 };
 
-export function BotStatusIndicator({ status, platform, meetingId, createdAt, errorMessage, onRetry, onStopped }: BotStatusIndicatorProps) {
+export function BotStatusIndicator({ status, platform, meetingId, createdAt, updatedAt, errorMessage, onRetry, onStopped }: BotStatusIndicatorProps) {
   const [dots, setDots] = useState("");
   const [isTimedOut, setIsTimedOut] = useState(false);
   const [isBotRunning, setIsBotRunning] = useState<boolean | null>(null);
@@ -73,22 +75,27 @@ export function BotStatusIndicator({ status, platform, meetingId, createdAt, err
     }
   }, [status]);
 
-  // Track elapsed time and check for timeout
+  // Track elapsed time and check for timeout (for both requested and joining states)
   useEffect(() => {
-    if (status !== "requested" || !createdAt) {
+    const isEarlyState = status === "requested" || status === "joining";
+    if (!isEarlyState || !createdAt) {
       setIsTimedOut(false);
       setElapsedSeconds(0);
       return;
     }
 
+    const timeoutSeconds = status === "requested" ? REQUESTED_TIMEOUT_SECONDS : JOINING_TIMEOUT_SECONDS;
+    // For joining status, use updatedAt (when it transitioned to joining) if available
+    const referenceTime = status === "joining" && updatedAt ? updatedAt : createdAt;
+
     const checkTimeout = () => {
       // Parse timestamp as UTC (API returns timestamps without timezone suffix)
-      const created = parseUTCTimestamp(createdAt).getTime();
+      const reference = parseUTCTimestamp(referenceTime).getTime();
       const now = Date.now();
-      const elapsed = Math.floor((now - created) / 1000);
+      const elapsed = Math.floor((now - reference) / 1000);
       setElapsedSeconds(elapsed);
 
-      if (elapsed >= REQUESTED_TIMEOUT_SECONDS) {
+      if (elapsed >= timeoutSeconds) {
         setIsTimedOut(true);
       }
     };
@@ -96,11 +103,12 @@ export function BotStatusIndicator({ status, platform, meetingId, createdAt, err
     checkTimeout();
     const interval = setInterval(checkTimeout, 1000);
     return () => clearInterval(interval);
-  }, [status, createdAt]);
+  }, [status, createdAt, updatedAt]);
 
-  // Check if bot is actually running when in requested state for too long
+  // Check if bot is actually running when in early states for too long
   const checkBotStatus = useCallback(async () => {
-    if (status !== "requested") return;
+    const isEarlyState = status === "requested" || status === "joining";
+    if (!isEarlyState) return;
 
     try {
       const running = await vexaAPI.isBotRunning(platform as Platform, meetingId);
@@ -111,7 +119,8 @@ export function BotStatusIndicator({ status, platform, meetingId, createdAt, err
   }, [status, platform, meetingId]);
 
   useEffect(() => {
-    if (status !== "requested" || !isTimedOut) return;
+    const isEarlyState = status === "requested" || status === "joining";
+    if (!isEarlyState || !isTimedOut) return;
 
     checkBotStatus();
     const interval = setInterval(checkBotStatus, BOT_CHECK_INTERVAL_MS);
@@ -123,8 +132,11 @@ export function BotStatusIndicator({ status, platform, meetingId, createdAt, err
 
   if (!isEarlyState) return null;
 
-  // Show timeout warning if bot has been in "requested" state too long and is not running
-  if (isTimedOut && status === "requested" && isBotRunning === false) {
+  // Show timeout warning if bot has been stuck too long and is not running
+  const isStuckAndNotRunning = isTimedOut && (status === "requested" || status === "joining") && isBotRunning === false;
+
+  if (isStuckAndNotRunning) {
+    const isJoiningStuck = status === "joining";
     return (
       <Card className="border-orange-500/50 bg-orange-500/5">
         <CardContent className="pt-8 pb-8">
@@ -133,13 +145,19 @@ export function BotStatusIndicator({ status, platform, meetingId, createdAt, err
               <AlertTriangle className="h-8 w-8 text-orange-500" />
             </div>
             <h2 className="text-xl font-semibold mb-2 text-orange-600 dark:text-orange-400">
-              Bot Failed to Start
+              {isJoiningStuck ? "Bot Connection Lost" : "Bot Failed to Start"}
             </h2>
             <p className="text-sm text-muted-foreground max-w-sm mb-2">
-              The bot has been waiting for {elapsedSeconds} seconds but the container never started.
+              {isJoiningStuck
+                ? `The bot has been trying to join for ${elapsedSeconds} seconds but the connection was lost.`
+                : `The bot has been waiting for ${elapsedSeconds} seconds but the container never started.`
+              }
             </p>
             <p className="text-xs text-muted-foreground max-w-sm mb-4">
-              This may be due to server issues or resource limits. Stop this bot to free up your slot and try again.
+              {isJoiningStuck
+                ? "This can happen due to Google's security checks or meeting access issues. Stop this bot to free up your slot and try again."
+                : "This may be due to server issues or resource limits. Stop this bot to free up your slot and try again."
+              }
             </p>
             <div className="flex gap-2">
               <Button

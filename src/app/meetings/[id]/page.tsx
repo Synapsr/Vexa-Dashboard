@@ -314,6 +314,7 @@ export default function MeetingDetailPage() {
               platform={currentMeeting.platform}
               meetingId={currentMeeting.platform_specific_id}
               createdAt={currentMeeting.created_at}
+              updatedAt={currentMeeting.updated_at}
               onStopped={() => {
                 // Refresh meeting data after stopping
                 fetchMeeting(meetingId);
