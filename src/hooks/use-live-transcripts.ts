@@ -175,11 +175,13 @@ export function useLiveTranscripts(
       }
 
       // Append auth token as query parameter if available
+      // Vexa uses X-API-Key header for REST, but browsers can't set WS headers
+      // So we pass it as api_key query parameter
       if (authToken) {
         const separator = wsUrl.includes("?") ? "&" : "?";
-        wsUrl = `${wsUrl}${separator}token=${encodeURIComponent(authToken)}`;
+        wsUrl = `${wsUrl}${separator}api_key=${encodeURIComponent(authToken)}`;
       }
-      console.log("[LiveTranscripts] Connecting to:", wsUrl.replace(/token=([^&]+)/, "token=***"));
+      console.log("[LiveTranscripts] Connecting to:", wsUrl.replace(/api_key=([^&]+)/, "api_key=***"));
 
       try {
         const ws = new WebSocket(wsUrl);

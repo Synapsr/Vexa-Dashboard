@@ -52,7 +52,7 @@ async function fetchConfig(): Promise<{ wsUrl: string; authToken: string | null 
 function buildWsUrl(baseUrl: string, authToken: string | null): string {
   if (!authToken) return baseUrl;
   const separator = baseUrl.includes("?") ? "&" : "?";
-  return `${baseUrl}${separator}token=${encodeURIComponent(authToken)}`;
+  return `${baseUrl}${separator}api_key=${encodeURIComponent(authToken)}`;
 }
 
 export function useVexaWebSocket(
@@ -136,7 +136,7 @@ export function useVexaWebSocket(
 
     const config = await fetchConfig();
     const wsUrl = buildWsUrl(config.wsUrl, config.authToken);
-    console.log("WebSocket: Connecting to", wsUrl.replace(/token=([^&]+)/, "token=***"));
+    console.log("WebSocket: Connecting to", wsUrl.replace(/api_key=([^&]+)/, "api_key=***"));
 
     try {
       const ws = new WebSocket(wsUrl);
