@@ -121,7 +121,8 @@ export const vexaAPI = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
     });
-    return handleResponse<Meeting>(response);
+    const raw = await handleResponse<RawMeeting>(response);
+    return mapMeeting(raw);
   },
 
   async stopBot(platform: Platform, nativeId: string): Promise<void> {
@@ -153,6 +154,24 @@ export const vexaAPI = {
         response.status,
         await response.text()
       );
+    }
+  },
+
+  // Bot status - check if bots are actually running
+  async getBotStatus(): Promise<{ running_bots: Array<{ container_id: string; meeting_id: number; platform: string; native_meeting_id: string }> }> {
+    const response = await fetch("/api/vexa/bots/status");
+    return handleResponse<{ running_bots: Array<{ container_id: string; meeting_id: number; platform: string; native_meeting_id: string }> }>(response);
+  },
+
+  // Check if a specific bot is running
+  async isBotRunning(platform: Platform, nativeId: string): Promise<boolean> {
+    try {
+      const status = await this.getBotStatus();
+      return status.running_bots.some(
+        (bot) => bot.platform === platform && bot.native_meeting_id === nativeId
+      );
+    } catch {
+      return false;
     }
   },
 

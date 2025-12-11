@@ -222,6 +222,7 @@ export default function MeetingDetailPage() {
               status={currentMeeting.status}
               platform={currentMeeting.platform}
               meetingId={currentMeeting.platform_specific_id}
+              createdAt={currentMeeting.created_at}
             />
           )}
 

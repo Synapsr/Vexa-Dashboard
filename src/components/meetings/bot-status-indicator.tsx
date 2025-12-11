@@ -1,15 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Check, Clock, DoorOpen, Radio, XCircle } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Loader2, Check, Clock, DoorOpen, Radio, XCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { MeetingStatus } from "@/types/vexa";
+import { vexaAPI } from "@/lib/api";
+import type { MeetingStatus, Platform } from "@/types/vexa";
+
+// Timeout in seconds before showing a warning
+const REQUESTED_TIMEOUT_SECONDS = 30;
+const BOT_CHECK_INTERVAL_MS = 5000;
 
 interface BotStatusIndicatorProps {
   status: MeetingStatus;
   platform: string;
   meetingId: string;
+  createdAt?: string;
+  onRetry?: () => void;
 }
 
 const STATUS_STEPS = [
@@ -28,8 +36,11 @@ const STATUS_ORDER: Record<string, number> = {
   failed: -1,
 };
 
-export function BotStatusIndicator({ status, platform, meetingId }: BotStatusIndicatorProps) {
+export function BotStatusIndicator({ status, platform, meetingId, createdAt, onRetry }: BotStatusIndicatorProps) {
   const [dots, setDots] = useState("");
+  const [isTimedOut, setIsTimedOut] = useState(false);
+  const [isBotRunning, setIsBotRunning] = useState<boolean | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Animate dots for loading states
   useEffect(() => {
@@ -41,10 +52,89 @@ export function BotStatusIndicator({ status, platform, meetingId }: BotStatusInd
     }
   }, [status]);
 
+  // Track elapsed time and check for timeout
+  useEffect(() => {
+    if (status !== "requested" || !createdAt) {
+      setIsTimedOut(false);
+      setElapsedSeconds(0);
+      return;
+    }
+
+    const checkTimeout = () => {
+      const created = new Date(createdAt).getTime();
+      const now = Date.now();
+      const elapsed = Math.floor((now - created) / 1000);
+      setElapsedSeconds(elapsed);
+
+      if (elapsed >= REQUESTED_TIMEOUT_SECONDS) {
+        setIsTimedOut(true);
+      }
+    };
+
+    checkTimeout();
+    const interval = setInterval(checkTimeout, 1000);
+    return () => clearInterval(interval);
+  }, [status, createdAt]);
+
+  // Check if bot is actually running when in requested state for too long
+  const checkBotStatus = useCallback(async () => {
+    if (status !== "requested") return;
+
+    try {
+      const running = await vexaAPI.isBotRunning(platform as Platform, meetingId);
+      setIsBotRunning(running);
+    } catch {
+      setIsBotRunning(false);
+    }
+  }, [status, platform, meetingId]);
+
+  useEffect(() => {
+    if (status !== "requested" || !isTimedOut) return;
+
+    checkBotStatus();
+    const interval = setInterval(checkBotStatus, BOT_CHECK_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [status, isTimedOut, checkBotStatus]);
+
   const currentStep = STATUS_ORDER[status] ?? -1;
   const isEarlyState = currentStep >= 0 && currentStep < 3;
 
   if (!isEarlyState) return null;
+
+  // Show timeout warning if bot has been in "requested" state too long and is not running
+  if (isTimedOut && status === "requested" && isBotRunning === false) {
+    return (
+      <Card className="border-orange-500/50 bg-orange-500/5">
+        <CardContent className="pt-8 pb-8">
+          <div className="flex flex-col items-center text-center">
+            <div className="h-16 w-16 rounded-full bg-orange-500/10 flex items-center justify-center mb-4">
+              <AlertTriangle className="h-8 w-8 text-orange-500" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2 text-orange-600 dark:text-orange-400">
+              Bot Failed to Start
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-sm mb-2">
+              The bot has been in &quot;requested&quot; state for {elapsedSeconds} seconds but doesn&apos;t appear to be running.
+            </p>
+            <p className="text-xs text-muted-foreground max-w-sm mb-4">
+              This usually indicates a backend issue with the bot container orchestration.
+            </p>
+            {onRetry && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRetry}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Try Again
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const getStatusIcon = (stepStatus: string, isActive: boolean, isCompleted: boolean) => {
     if (isCompleted) {
