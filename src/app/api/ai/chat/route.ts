@@ -1,12 +1,23 @@
-import { streamText } from "ai";
+import { streamText, convertToModelMessages } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import type { AIProvider } from "@/stores/ai-store";
 
 export const runtime = "nodejs";
 
+interface UIMessagePart {
+  type: string;
+  text?: string;
+}
+
+interface UIMessage {
+  role: "user" | "assistant" | "system";
+  content?: string;
+  parts?: UIMessagePart[];
+}
+
 interface ChatRequest {
-  messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+  messages: UIMessage[];
   context: string;
   settings: {
     provider: AIProvider;
@@ -83,6 +94,33 @@ function getModel(settings: ChatRequest["settings"]) {
   }
 }
 
+// Convert UI messages (with parts) to model messages (with content)
+function convertMessages(messages: UIMessage[]): Array<{ role: "user" | "assistant"; content: string }> {
+  return messages
+    .filter(m => m.role === "user" || m.role === "assistant")
+    .map(m => {
+      let content = "";
+
+      // If message has parts array (UI message format)
+      if (m.parts && Array.isArray(m.parts)) {
+        content = m.parts
+          .filter(part => part.type === "text" && part.text)
+          .map(part => part.text!)
+          .join("");
+      }
+      // If message has content string (model message format)
+      else if (m.content) {
+        content = m.content;
+      }
+
+      return {
+        role: m.role as "user" | "assistant",
+        content,
+      };
+    })
+    .filter(m => m.content.length > 0);
+}
+
 export async function POST(request: Request) {
   try {
     const body: ChatRequest = await request.json();
@@ -95,6 +133,13 @@ export async function POST(request: Request) {
       });
     }
 
+    if (!settings?.apiKey && settings.provider !== "custom") {
+      return new Response(JSON.stringify({ error: "API key is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // Build the full system prompt with context
     const systemPrompt = context
       ? `${SYSTEM_PROMPT}\n\n${context}`
@@ -102,13 +147,20 @@ export async function POST(request: Request) {
 
     const model = getModel(settings);
 
+    // Convert UI messages to model messages
+    const modelMessages = convertMessages(messages);
+
+    if (modelMessages.length === 0) {
+      return new Response(JSON.stringify({ error: "No valid messages to process" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const result = streamText({
       model,
       system: systemPrompt,
-      messages: messages.map(m => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
+      messages: modelMessages,
       onError({ error }) {
         console.error("AI streaming error:", error);
       },

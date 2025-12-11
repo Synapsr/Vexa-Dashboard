@@ -1,11 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Settings2, Eye, EyeOff, Check, ExternalLink } from "lucide-react";
+import {
+  Settings2,
+  Eye,
+  EyeOff,
+  Check,
+  ExternalLink,
+  Sparkles,
+  Zap,
+  Globe,
+  Server,
+  ChevronRight,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -20,8 +32,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { useAIStore, AI_PROVIDERS, type AIProvider } from "@/stores/ai-store";
 import { cn } from "@/lib/utils";
+
+// Provider icons
+const PROVIDER_ICONS: Record<AIProvider, typeof Sparkles> = {
+  openai: Sparkles,
+  anthropic: Sparkles,
+  groq: Zap,
+  openrouter: Globe,
+  custom: Server,
+};
 
 export function AISettingsDialog() {
   const { settings, updateSettings, isConfigured } = useAIStore();
@@ -51,151 +73,219 @@ export function AISettingsDialog() {
     }
   };
 
+  const ProviderIcon = PROVIDER_ICONS[settings.provider] || Settings2;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="sm" className="gap-2">
           <Settings2 className="h-4 w-4" />
+          <span className="hidden sm:inline">Settings</span>
           {isConfigured && (
-            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-green-500" />
+            <span className="h-2 w-2 rounded-full bg-green-500" />
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>AI Settings</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <ProviderIcon className="h-4 w-4 text-primary" />
+            </div>
+            AI Settings
+          </DialogTitle>
           <DialogDescription>
-            Configure your AI provider to enable chat with your transcripts
+            Connect your AI provider to analyze meeting transcripts
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 pt-4">
-          {/* Provider Selection */}
-          <div className="space-y-2">
-            <Label>Provider</Label>
-            <Select
-              value={settings.provider}
-              onValueChange={(v) => handleProviderChange(v as AIProvider)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AI_PROVIDERS.map(provider => (
-                  <SelectItem key={provider.id} value={provider.id}>
-                    <div className="flex flex-col">
-                      <span>{provider.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {provider.description}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* API Key */}
-          {currentProvider?.requiresApiKey && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="apiKey">API Key</Label>
-                {getProviderDocs(settings.provider) && (
-                  <a
-                    href={getProviderDocs(settings.provider)!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+        <div className="space-y-6 py-4">
+          {/* Provider Selection - Card Style */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Provider</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {AI_PROVIDERS.slice(0, 4).map(provider => {
+                const Icon = PROVIDER_ICONS[provider.id];
+                const isSelected = settings.provider === provider.id;
+                return (
+                  <button
+                    key={provider.id}
+                    onClick={() => handleProviderChange(provider.id)}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all",
+                      isSelected
+                        ? "border-primary bg-primary/5"
+                        : "border-muted hover:border-muted-foreground/20 hover:bg-muted/50"
+                    )}
                   >
-                    Get API key <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
+                    <div className={cn(
+                      "h-8 w-8 rounded-md flex items-center justify-center shrink-0",
+                      isSelected ? "bg-primary text-primary-foreground" : "bg-muted"
+                    )}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={cn(
+                        "font-medium text-sm truncate",
+                        isSelected && "text-primary"
+                      )}>
+                        {provider.name}
+                      </p>
+                    </div>
+                    {isSelected && (
+                      <Check className="h-4 w-4 text-primary ml-auto shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Custom Provider Option */}
+            <button
+              onClick={() => handleProviderChange("custom")}
+              className={cn(
+                "w-full flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all",
+                settings.provider === "custom"
+                  ? "border-primary bg-primary/5"
+                  : "border-muted hover:border-muted-foreground/20 hover:bg-muted/50"
+              )}
+            >
+              <div className={cn(
+                "h-8 w-8 rounded-md flex items-center justify-center shrink-0",
+                settings.provider === "custom" ? "bg-primary text-primary-foreground" : "bg-muted"
+              )}>
+                <Server className="h-4 w-4" />
               </div>
-              <div className="relative">
+              <div className="min-w-0 flex-1">
+                <p className={cn(
+                  "font-medium text-sm",
+                  settings.provider === "custom" && "text-primary"
+                )}>
+                  Custom / Local
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Ollama, LM Studio, or any OpenAI-compatible API
+                </p>
+              </div>
+              {settings.provider === "custom" ? (
+                <Check className="h-4 w-4 text-primary shrink-0" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              )}
+            </button>
+          </div>
+
+          <Separator />
+
+          {/* Configuration Section */}
+          <div className="space-y-4">
+            {/* API Key */}
+            {currentProvider?.requiresApiKey && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="apiKey" className="text-sm font-medium">
+                    API Key
+                  </Label>
+                  {getProviderDocs(settings.provider) && (
+                    <a
+                      href={getProviderDocs(settings.provider)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      Get key <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+                <div className="relative">
+                  <Input
+                    id="apiKey"
+                    type={showApiKey ? "text" : "password"}
+                    value={settings.apiKey}
+                    onChange={(e) => updateSettings({ apiKey: e.target.value })}
+                    placeholder={`sk-...`}
+                    className="pr-10 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Custom Base URL */}
+            {settings.provider === "custom" && (
+              <div className="space-y-2">
+                <Label htmlFor="customBaseUrl" className="text-sm font-medium">
+                  Base URL
+                </Label>
                 <Input
-                  id="apiKey"
-                  type={showApiKey ? "text" : "password"}
-                  value={settings.apiKey}
-                  onChange={(e) => updateSettings({ apiKey: e.target.value })}
-                  placeholder={`Enter your ${currentProvider?.name} API key`}
-                  className="pr-10"
+                  id="customBaseUrl"
+                  value={settings.customBaseUrl}
+                  onChange={(e) => updateSettings({ customBaseUrl: e.target.value })}
+                  placeholder="http://localhost:11434/v1"
+                  className="font-mono text-sm"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Your API key is stored locally in your browser and never sent to our servers.
-              </p>
-            </div>
-          )}
+            )}
 
-          {/* Custom Base URL for Custom provider */}
-          {settings.provider === "custom" && (
+            {/* Model Selection */}
             <div className="space-y-2">
-              <Label htmlFor="customBaseUrl">Base URL</Label>
-              <Input
-                id="customBaseUrl"
-                value={settings.customBaseUrl}
-                onChange={(e) => updateSettings({ customBaseUrl: e.target.value })}
-                placeholder="http://localhost:11434/v1"
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the base URL for your OpenAI-compatible API (e.g., Ollama, LM Studio)
-              </p>
+              <Label className="text-sm font-medium">Model</Label>
+              {settings.provider === "custom" ? (
+                <Input
+                  value={settings.customModel}
+                  onChange={(e) => updateSettings({ customModel: e.target.value })}
+                  placeholder="llama3.2:latest"
+                  className="font-mono text-sm"
+                />
+              ) : (
+                <Select
+                  value={settings.model}
+                  onValueChange={(v) => updateSettings({ model: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map(model => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
-          )}
-
-          {/* Model Selection */}
-          <div className="space-y-2">
-            <Label>Model</Label>
-            {settings.provider === "custom" ? (
-              <Input
-                value={settings.customModel}
-                onChange={(e) => updateSettings({ customModel: e.target.value })}
-                placeholder="llama3.2:latest"
-              />
-            ) : (
-              <Select
-                value={settings.model}
-                onValueChange={(v) => updateSettings({ model: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.map(model => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           </div>
 
-          {/* Status */}
-          <div className={cn(
-            "flex items-center gap-2 p-3 rounded-lg text-sm",
-            isConfigured ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-muted text-muted-foreground"
-          )}>
-            {isConfigured ? (
-              <>
-                <Check className="h-4 w-4" />
-                Ready to chat
-              </>
-            ) : (
-              <>
-                <Settings2 className="h-4 w-4" />
-                {settings.provider === "custom" ? "Enter a base URL to continue" : "Enter your API key to continue"}
-              </>
-            )}
-          </div>
+          {/* Security Note */}
+          <p className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
+            Your API key is stored locally in your browser and is only sent directly to {currentProvider?.name || "your provider"}.
+          </p>
         </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          {/* Status indicator */}
+          <div className="flex-1 flex items-center gap-2">
+            {isConfigured ? (
+              <span className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                Ready
+              </span>
+            ) : (
+              <span className="text-sm text-muted-foreground">
+                {settings.provider === "custom" ? "Enter base URL" : "Enter API key"}
+              </span>
+            )}
+          </div>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

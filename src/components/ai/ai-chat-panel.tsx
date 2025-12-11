@@ -11,6 +11,8 @@ import {
   Trash2,
   StopCircle,
   AlertCircle,
+  XCircle,
+  RefreshCw,
 } from "lucide-react";
 import {
   Sheet,
@@ -99,6 +101,7 @@ export function AIChatPanel({ meeting, transcripts = [], trigger }: AIChatPanelP
     setMessages,
     sendMessage,
     stop,
+    clearError,
   } = useChat({
     transport,
   });
@@ -121,39 +124,42 @@ export function AIChatPanel({ meeting, transcripts = [], trigger }: AIChatPanelP
 
   const handleClear = useCallback(() => {
     setMessages([]);
-  }, [setMessages]);
+    clearError();
+  }, [setMessages, clearError]);
+
+  const doSendMessage = useCallback((text: string) => {
+    if (text.trim() && !isLoading) {
+      clearError();
+      sendMessage({
+        parts: [{ type: "text" as const, text: text.trim() }],
+      });
+    }
+  }, [isLoading, sendMessage, clearError]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      if (input.trim() && !isLoading) {
-        sendMessage({
-          parts: [{ type: "text" as const, text: input.trim() }],
-        });
-        setInput("");
-      }
+      doSendMessage(input);
+      setInput("");
     },
-    [input, isLoading, sendMessage]
+    [input, doSendMessage]
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (input.trim() && !isLoading) {
-          sendMessage({
-            parts: [{ type: "text" as const, text: input.trim() }],
-          });
-          setInput("");
-        }
+        doSendMessage(input);
+        setInput("");
       }
     },
-    [input, isLoading, sendMessage]
+    [input, doSendMessage]
   );
 
+  // Send suggested prompt immediately
   const handleSuggestedPrompt = useCallback((prompt: string) => {
-    setInput(prompt);
-  }, []);
+    doSendMessage(prompt);
+  }, [doSendMessage]);
 
   const suggestedPrompts = [
     "Summarize this meeting",
@@ -173,6 +179,24 @@ export function AIChatPanel({ meeting, transcripts = [], trigger }: AIChatPanelP
         .join("");
     }
     return "";
+  };
+
+  // Get user-friendly error message
+  const getErrorMessage = (err: Error): string => {
+    const msg = err.message.toLowerCase();
+    if (msg.includes("invalid api key") || msg.includes("incorrect api key") || msg.includes("401")) {
+      return "Invalid API key. Please check your API key in settings.";
+    }
+    if (msg.includes("rate limit") || msg.includes("429")) {
+      return "Rate limit exceeded. Please wait a moment and try again.";
+    }
+    if (msg.includes("insufficient") || msg.includes("quota")) {
+      return "API quota exceeded. Please check your account balance.";
+    }
+    if (msg.includes("network") || msg.includes("fetch")) {
+      return "Network error. Please check your connection.";
+    }
+    return err.message;
   };
 
   return (
@@ -213,6 +237,42 @@ export function AIChatPanel({ meeting, transcripts = [], trigger }: AIChatPanelP
           )}
         </SheetHeader>
 
+        {/* Error Banner - Prominent at top */}
+        {error && (
+          <div className="mx-4 mt-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
+                <XCircle className="h-5 w-5 text-destructive" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-destructive">Something went wrong</p>
+                <p className="text-sm text-destructive/80 mt-1">
+                  {getErrorMessage(error)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={clearError}
+                className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearError}
+                className="text-xs"
+              >
+                Dismiss
+              </Button>
+              <AISettingsDialog />
+            </div>
+          </div>
+        )}
+
         {/* Messages Area */}
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
           {!isConfigured ? (
@@ -226,7 +286,7 @@ export function AIChatPanel({ meeting, transcripts = [], trigger }: AIChatPanelP
               </p>
               <AISettingsDialog />
             </div>
-          ) : messages.length === 0 ? (
+          ) : messages.length === 0 && !error ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-4">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                 <MessageSquare className="h-8 w-8 text-primary" />
@@ -243,7 +303,8 @@ export function AIChatPanel({ meeting, transcripts = [], trigger }: AIChatPanelP
                     <button
                       key={prompt}
                       onClick={() => handleSuggestedPrompt(prompt)}
-                      className="text-left text-sm px-3 py-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                      disabled={isLoading}
+                      className="text-left text-sm px-3 py-2 rounded-lg bg-muted hover:bg-primary/10 hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {prompt}
                     </button>
@@ -303,17 +364,6 @@ export function AIChatPanel({ meeting, transcripts = [], trigger }: AIChatPanelP
             </div>
           )}
         </ScrollArea>
-
-        {/* Error Display */}
-        {error && (
-          <div className="mx-4 mb-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium">Error</p>
-              <p className="text-xs opacity-80">{error.message}</p>
-            </div>
-          </div>
-        )}
 
         {/* Input Area */}
         {isConfigured && (
