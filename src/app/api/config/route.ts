@@ -23,9 +23,13 @@ export async function GET() {
   const cookieStore = await cookies();
   const authToken = cookieStore.get("vexa-token")?.value;
 
+  // Get default bot name from environment (optional)
+  const defaultBotName = process.env.DEFAULT_BOT_NAME || null;
+
   return NextResponse.json({
     wsUrl,
     apiUrl,
     authToken: authToken || null,
+    defaultBotName,
   });
 }

@@ -128,6 +128,7 @@ services:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `DEFAULT_BOT_NAME` | Default name for transcription bots | `Vexa - Open Source Bot` |
 | `AI_MODEL` | AI provider/model (e.g., `openai/gpt-4o`) | - |
 | `AI_API_KEY` | API key for AI provider | - |
 | `SMTP_HOST` | SMTP server for Magic Link auth | - |

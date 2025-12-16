@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { vexaAPI } from "@/lib/api";
 import { useLiveStore } from "@/stores/live-store";
+import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 import type { Platform, CreateBotRequest } from "@/types/vexa";
 import { PLATFORM_CONFIG, SUPPORTED_LANGUAGES } from "@/types/vexa";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ interface JoinFormProps {
 export function JoinForm({ onSuccess }: JoinFormProps) {
   const router = useRouter();
   const { setActiveMeeting } = useLiveStore();
+  const { config } = useRuntimeConfig();
 
   const [platform, setPlatform] = useState<Platform>("google_meet");
   const [meetingId, setMeetingId] = useState("");
@@ -91,9 +93,8 @@ export function JoinForm({ onSuccess }: JoinFormProps) {
         request.passcode = passcode.trim();
       }
 
-      if (botName.trim()) {
-        request.bot_name = botName.trim();
-      }
+      // Set bot name - use custom name or configured default
+      request.bot_name = botName.trim() || config?.defaultBotName || "Vexa - Open Source Bot";
 
       if (language && language !== "auto") {
         request.language = language;

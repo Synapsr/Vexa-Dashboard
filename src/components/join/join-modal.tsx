@@ -25,6 +25,7 @@ import { vexaAPI } from "@/lib/api";
 import { useLiveStore } from "@/stores/live-store";
 import { useJoinModalStore } from "@/stores/join-modal-store";
 import { useMeetingsStore } from "@/stores/meetings-store";
+import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 import type { Platform, CreateBotRequest } from "@/types/vexa";
 import { SUPPORTED_LANGUAGES } from "@/types/vexa";
 import { cn } from "@/lib/utils";
@@ -94,6 +95,7 @@ export function JoinModal() {
   const { isOpen, closeModal } = useJoinModalStore();
   const { setActiveMeeting } = useLiveStore();
   const { setCurrentMeeting } = useMeetingsStore();
+  const { config } = useRuntimeConfig();
 
   const [meetingInput, setMeetingInput] = useState("");
   const [platform, setPlatform] = useState<Platform>("google_meet");
@@ -156,8 +158,8 @@ export function JoinModal() {
         request.passcode = passcode.trim();
       }
 
-      // Set bot name - use custom name or default
-      request.bot_name = botName.trim() || "Vexa - Open Source Bot";
+      // Set bot name - use custom name or configured default
+      request.bot_name = botName.trim() || config?.defaultBotName || "Vexa - Open Source Bot";
 
       if (language && language !== "auto") {
         request.language = language;
@@ -183,7 +185,7 @@ export function JoinModal() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [parsedInput, passcode, botName, language, setActiveMeeting, setCurrentMeeting, closeModal, router]);
+  }, [parsedInput, passcode, botName, language, config, setActiveMeeting, setCurrentMeeting, closeModal, router]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeModal()}>

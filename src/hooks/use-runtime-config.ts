@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 interface RuntimeConfig {
   wsUrl: string;
   apiUrl: string;
+  defaultBotName: string | null;
 }
 
 // Global cache to avoid refetching on every component mount
@@ -66,6 +67,18 @@ export function getWsUrl(): string {
   }
   // Fallback to default (runtime config should always be available)
   return "ws://localhost:18056/ws";
+}
+
+/**
+ * Get the default bot name synchronously (returns cached value or fallback)
+ * For use in non-hook contexts or when you need immediate access
+ */
+export function getDefaultBotName(): string {
+  if (cachedConfig?.defaultBotName) {
+    return cachedConfig.defaultBotName;
+  }
+  // Fallback to default
+  return "Vexa - Open Source Bot";
 }
 
 /**
